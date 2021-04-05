@@ -33,7 +33,7 @@ class HMM():
 		# epsilon to prevent division by zero error
 		self.epsilon = 1e-10
 
-		
+
 	# Plot Gaussian Contours
 	def	plot_Gaussian(self, ax, y, sigma, mu):
 		x1 = np.linspace(start=min(y[:,0]), stop=max(y[:,0]), num=150)
@@ -79,7 +79,7 @@ class HMM():
 		self.Sigma_inv = [np.linalg.pinv(S) for S in self.Sigma]
 
 		# k = 1/2pi*det(Sigma)
-		self.k = [1.0/(2*math.pi*np.linalg.det(S)) for S in self.Sigma]
+		self.k = [1.0/((((2*math.pi)**Y.shape[1])*np.linalg.det(S))**0.5) for S in self.Sigma]
 
 		# Posterior Probability
 		self.q_x_y = np.zeros((len(Y), self.num_class))
@@ -183,7 +183,7 @@ class HMM():
 		# Updating Sigma
 		self.Sigma = [np.cov(Y.T, aweights=self.q_x_y[:,i]) for i in range(self.num_class)]
 		self.Sigma_inv = [np.linalg.pinv(S) for S in self.Sigma]
-		self.k = [1.0/(2*math.pi*np.linalg.det(S)) for S in self.Sigma]
+		self.k = [1.0/((((2*math.pi)**Y.shape[1])*np.linalg.det(S))**0.5) for S in self.Sigma]
 
 		# Updating C
 		self.C = [np.sum(self.q_x_y[:,i].reshape(n,1)*Y, axis=0)/(np.sum(self.q_x_y[:,i])) for i in range(self.num_class)]
@@ -259,9 +259,10 @@ def main(args):
 	print(X)
 
 	print("\n\n\n")
-	print(predictions)
+	# print(predictions)
 
 	data["predictions"] = 2-predictions
+	print(data["predictions"].values)
 
 	# Plot data as a scatter plot
 	fig, ax = plt.subplots(1,2)
@@ -292,6 +293,6 @@ if __name__=="__main__":
 	parser.add_argument("--data_file", dest='data_file', type=str, default="HMMdata.csv",  action='store', help="csv file containing the data")
 	parser.add_argument("--out_file", dest='out_file', type=str, default="EM_HMM_output.tsv",  action='store', help="tsv file containing the output predictions")
 	parser.add_argument("--label_idx", dest='label_idx', type=int, default=0,  action='store', help="column index of true labels in data (assumed to be integer valued, starting from 0)")
-	parser.add_argument("--epochs", dest='epochs', type=int, default=300,  action='store', help="no. of epochs over the data")
+	parser.add_argument("--epochs", dest='epochs', type=int, default=25,  action='store', help="no. of epochs over the data")
 	args = parser.parse_args()
 	main(args)

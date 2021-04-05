@@ -75,7 +75,8 @@ class GMM():
 		self.Sigma_inv = [np.linalg.pinv(S) for S in self.Sigma]
 
 		# k = 1/2pi*det(Sigma)
-		self.k = [1.0/(2*math.pi*np.linalg.det(S)) for S in self.Sigma]
+		# self.k = [1.0/(2*math.pi*np.linalg.det(S)) for S in self.Sigma]
+		self.k = [1.0/((((2*math.pi)**Y.shape[1])*np.linalg.det(S))**0.5) for S in self.Sigma]
 
 		# Posterior Probability
 		self.q_x_y = np.zeros((len(Y), self.num_class))
@@ -108,7 +109,8 @@ class GMM():
 		# Updating Sigma
 		self.Sigma = [np.cov(Y.T, aweights=self.q_x_y[:,i]) for i in range(self.num_class)]
 		self.Sigma_inv = [np.linalg.pinv(S) for S in self.Sigma]
-		self.k = [1.0/(2*math.pi*np.linalg.det(S)) for S in self.Sigma]
+		self.k = [1.0/((((2*math.pi)**Y.shape[1])*np.linalg.det(S))**0.5) for S in self.Sigma]
+		# self.k = [1.0/(2*math.pi*np.linalg.det(S)) for S in self.Sigma]
 
 		# Updating C
 		self.C = [np.sum(self.q_x_y[:,i].reshape(n,1)*Y, axis=0)/(np.sum(self.q_x_y[:,i])) for i in range(self.num_class)]
