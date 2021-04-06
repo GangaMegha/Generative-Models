@@ -1,19 +1,6 @@
-import pandas as pd 
-import matplotlib.pyplot as plt 
 import numpy as np 
-import argparse
 import math
 from scipy.stats import multivariate_normal
-
-# Read data from file
-def loadData(filename):
-	data = pd.read_csv(filename, sep=',', header=None)
-	return data
-
-# Compute accuract in %
-def Accuracy(true, pred):
-	return np.mean(true==pred)*100
-
 
 class GMM():
 
@@ -27,27 +14,6 @@ class GMM():
 		# Updating dictionary
 		self.__dict__.update(config)
 
-		# Categorical Latent Variable
-		self.X = np.identity(self.num_class)
-
-		# epsilon to prevent division by zero error
-		self.epsilon = 1e-10
-
-	# Plot Gaussian Contours
-	def	plot_Gaussian(self, ax, y, sigma, mu):
-		x1 = np.linspace(start=min(y[:,0]), stop=max(y[:,0]), num=150)
-		x2 = np.linspace(start=min(y[:,1]), stop=max(y[:,1]), num=150)
-		X,Y = np.meshgrid(x1, x2)
-
-		# Probability Density
-		rv = multivariate_normal(mu, sigma)
-		pos = np.empty(X.shape + (2,))
-		pos[:, :, 0] = X
-		pos[:, :, 1] = Y
-		pdf = rv.pdf(pos)
-
-		ax.contour(X, Y, pdf)
-
 
 	# FUnction for initializing parameters
 	def initialize_params(self, Y):
@@ -60,6 +26,12 @@ class GMM():
 		data = Y
 		np.random.shuffle(np.array(data))
 		data = np.array_split(data, self.num_class)
+
+		# Number of observations (n = 1 to N)
+		self.N = Y.shape[0]
+
+		# Dimention of data
+		self.D = Y.shape[1]
 
 		# pi : probability for categorical distribution for latent variable X : P(X=i)
 		# initialized uniformly
@@ -75,11 +47,14 @@ class GMM():
 		self.Sigma_inv = [np.linalg.pinv(S) for S in self.Sigma]
 
 		# k = 1/2pi*det(Sigma)
-		# self.k = [1.0/(2*math.pi*np.linalg.det(S)) for S in self.Sigma]
-		self.k = [1.0/((((2*math.pi)**Y.shape[1])*np.linalg.det(S))**0.5) for S in self.Sigma]
+		self.k = [1.0/((((2*math.pi)**self.D)*np.linalg.det(S))**0.5) for S in self.Sigma]
 
-		# Posterior Probability
-		self.q_x_y = np.zeros((len(Y), self.num_class))
+		# Posterior Probability : q(X|Y)
+		self.q_x_y = np.zeros((self.N, self.num_class))
+		self.q_x_y_prev = np.zeros((self.N, self.num_class))
+
+		# log_joint = -log q(X, Y)
+		self.log_joint = np.zeros((self.N, self.num_class))
 
 		print("pi : ", self.pi)
 		print("\n\n\nC : \n", self.C)
@@ -90,11 +65,15 @@ class GMM():
 	def Expectation(self, Y):
 
 		# Computing posterior probability
+		self.q_x_y_prev = self.q_x_y.copy()
+
 		for row, y in enumerate(Y):
 			for i in range(self.num_class):
 				q_y_x = self.k[i]*np.exp(-0.5*(y - self.C[i]).T @ self.Sigma_inv[i] @ (y - self.C[i]))
 				q_x = self.pi[i]
+
 				self.q_x_y[row, i] = q_y_x * q_x
+				self.log_joint[row, i] = - np.log(self.q_x_y[row, i]) 
 
 			self.q_x_y[row,:] = self.q_x_y[row,:]/(np.sum(self.q_x_y[row,:]))
 
@@ -104,17 +83,19 @@ class GMM():
 		# Updating pi
 		self.pi = np.mean(self.q_x_y, axis=0)
 
-		n = self.q_x_y.shape[0]
-
 		# Updating Sigma
 		self.Sigma = [np.cov(Y.T, aweights=self.q_x_y[:,i]) for i in range(self.num_class)]
 		self.Sigma_inv = [np.linalg.pinv(S) for S in self.Sigma]
-		self.k = [1.0/((((2*math.pi)**Y.shape[1])*np.linalg.det(S))**0.5) for S in self.Sigma]
-		# self.k = [1.0/(2*math.pi*np.linalg.det(S)) for S in self.Sigma]
+		self.k = [1.0/((((2*math.pi)**self.D)*np.linalg.det(S))**0.5) for S in self.Sigma]
 
 		# Updating C
-		self.C = [np.sum(self.q_x_y[:,i].reshape(n,1)*Y, axis=0)/(np.sum(self.q_x_y[:,i])) for i in range(self.num_class)]
+		self.C = [np.sum(self.q_x_y[:,i].reshape(self.N,1)*Y, axis=0)/(np.sum(self.q_x_y[:,i])) for i in range(self.num_class)]
 
+			
+	def FullCrossEntropy(self):
+		# <-log q(X,Y)>_{p(Y)q(X|Y)}
+		self.Entropy = np.mean(np.sum(self.log_joint * self.q_x_y, axis=1), axis=0)
+		self.err = np.mean((self.q_x_y-self.q_x_y_prev)**2)
 
 	def Expectation_Maximization(self, Y):
 
@@ -127,12 +108,20 @@ class GMM():
 
 		print("Running.....")
 
+		self.Expectation(Y)
+
 		# Iterations
 		for e in range(self.epochs):
-			self.Expectation(Y)
 			self.Maximization(Y)
+			self.Expectation(Y)
+			self.FullCrossEntropy()
 
-		self.Expectation(Y)
+			# Stopping Criteria
+			print(f"Epoch {e+1} ====> Full Cross Entropy : {self.Entropy}, Err : {self.err}")
+			if self.err < 2.5e-7:
+				break 
+
+
 		print("Finished.....")
 
 		print("\n\n\n", "-"*60, sep="")
@@ -142,73 +131,4 @@ class GMM():
 		print("\n\n\nC : \n", self.C)
 		print("\n\n\nSigma : \n", self.Sigma)
 
-		fig, ax = plt.subplots()
-		ax.scatter(Y[:,0],Y[:,1], marker='o', c='r')
-		self.plot_Gaussian(ax, Y, self.Sigma[0], self.C[0])
-		self.plot_Gaussian(ax, Y, self.Sigma[1], self.C[1])
-		self.plot_Gaussian(ax, Y, self.Sigma[2], self.C[2])
-
-		return(np.argmax(self.q_x_y, axis=1))
-		
-
-
-def main(args):
-	config = vars(args)
-
-	# Load data
-	data = loadData(args.data_file)
-
-	# Infer classes
-	config["num_class"] = len(data[args.label_idx].unique())
-
-	# Label
-	X = data[args.label_idx].values
-
-	# Data
-	Y = data.drop(args.label_idx, axis=1).values
-
-	# Create GMM instance
-	gmm = GMM(config)
-
-	# Train GMM using Expectation Maximization 
-	predictions = gmm.Expectation_Maximization(Y)
-
-	print(X)
-
-	print("\n\n\n")
-	print(predictions)
-
-	data["predictions"] = 2-predictions
-
-	# Plot data as a scatter plot
-	fig, ax = plt.subplots(1,2)
-	ax[0].scatter(data[data[args.label_idx]==0][1], data[data[args.label_idx]==0][2], marker='o', c='b', label="x=0")
-	ax[0].scatter(data[data[args.label_idx]==1][1], data[data[args.label_idx]==1][2], marker='o', c='g', label="x=1")
-	ax[0].scatter(data[data[args.label_idx]==2][1], data[data[args.label_idx]==2][2], marker='o', c='r', label="x=2")
-	ax[0].legend()
-
-	ax[1].scatter(data[data["predictions"]==0][1], data[data["predictions"]==0][2], marker='o', c='b', label="x=0")
-	ax[1].scatter(data[data["predictions"]==1][1], data[data["predictions"]==1][2], marker='o', c='g', label="x=1")
-	ax[1].scatter(data[data["predictions"]==2][1], data[data["predictions"]==2][2], marker='o', c='r', label="x=2")
-	ax[1].legend()
-	plt.show()
-
-	print("\n\n\nAccuracy of GMM:", Accuracy(data[[0]].values, data[["predictions"]].values))
-
-			
-	data.to_csv(args.out_file, sep="\t")
-	print("\n\n Outputs saved in {}".format(args.out_file))
-	print("\n\n\t\tEnd of program")
-
-	
-
-
-
-if __name__=="__main__":
-	parser = argparse.ArgumentParser()
-	parser.add_argument("--data_file", dest='data_file', type=str, default="HMMdata.csv",  action='store', help="csv file containing the data")
-	parser.add_argument("--out_file", dest='out_file', type=str, default="EM_GMM_output.tsv",  action='store', help="tsv file containing the output predictions")
-	parser.add_argument("--label_idx", dest='label_idx', type=int, default=0,  action='store', help="column index of true labels in data (assumed to be integer valued, starting from 0)")
-	parser.add_argument("--epochs", dest='epochs', type=int, default=500,  action='store', help="no. of epochs over the data")
-	args = parser.parse_args()
-	main(args)
+		return self.q_x_y, self.Sigma, self.C

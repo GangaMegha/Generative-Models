@@ -1,18 +1,7 @@
-import pandas as pd 
-import matplotlib.pyplot as plt 
 import numpy as np 
-import argparse
 import math
 from scipy.stats import multivariate_normal
 from scipy.special import digamma
-# Read data from file
-def loadData(filename):
-	data = pd.read_csv(filename, sep=',', header=None)
-	return data
-
-# Compute accuract in %
-def Accuracy(true, pred):
-	return np.mean(true==pred)*100
 
 
 class GMM_VarEM():
@@ -26,27 +15,6 @@ class GMM_VarEM():
 
 		# Updating dictionary
 		self.__dict__.update(config)
-
-		# Categorical Latent Variable
-		self.X = np.identity(self.num_class)
-
-		# epsilon to prevent division by zero error
-		self.epsilon = 1e-10
-
-	# Plot Gaussian Contours
-	def	plot_Gaussian(self, ax, y, sigma, mu):
-		x1 = np.linspace(start=min(y[:,0]), stop=max(y[:,0]), num=150)
-		x2 = np.linspace(start=min(y[:,1]), stop=max(y[:,1]), num=150)
-		X,Y = np.meshgrid(x1, x2)
-
-		# Probability Density
-		rv = multivariate_normal(mu, sigma)
-		pos = np.empty(X.shape + (2,))
-		pos[:, :, 0] = X
-		pos[:, :, 1] = Y
-		pdf = rv.pdf(pos)
-
-		ax.contour(X, Y, pdf)
 
 
 	# FUnction for initializing parameters
@@ -235,75 +203,4 @@ class GMM_VarEM():
 		print("\nbeta_k : ", self.beta_k)
 		print("\nnu_k : ", self.nu_k)
 
-		return(np.argmax(self.r_n_k, axis=1))
-	
-def assign_label(x):
-	if x==2:
-		return 1
-	elif x==1:
-		return 2
-	else :
-		return 0
-
-
-def main(args):
-	config = vars(args)
-
-	# Load data
-	data = loadData(args.data_file)
-
-	# Infer classes
-	config["num_class"] = len(data[args.label_idx].unique())
-
-	# Label
-	X = data[args.label_idx].values
-
-	# Data
-	Y = data.drop(args.label_idx, axis=1).values
-
-	# Create GMM instance
-	gmm = GMM_VarEM(config)
-
-	# Train GMM using Expectation Maximization 
-	predictions = gmm.Expectation_Maximization(Y)
-
-	print(X)
-
-	print("\n\n\n")
-	print(predictions)
-
-	data["predictions"] = predictions
-	data["predictions"] = data["predictions"].apply(lambda x: assign_label(x))
-
-	# Plot data as a scatter plot
-	fig, ax = plt.subplots(1,2)
-	ax[0].scatter(data[data[args.label_idx]==0][1], data[data[args.label_idx]==0][2], marker='o', c='b', label="x=0")
-	ax[0].scatter(data[data[args.label_idx]==1][1], data[data[args.label_idx]==1][2], marker='o', c='g', label="x=1")
-	ax[0].scatter(data[data[args.label_idx]==2][1], data[data[args.label_idx]==2][2], marker='o', c='r', label="x=2")
-	ax[0].legend()
-
-	ax[1].scatter(data[data["predictions"]==0][1], data[data["predictions"]==0][2], marker='o', c='b', label="x=0")
-	ax[1].scatter(data[data["predictions"]==1][1], data[data["predictions"]==1][2], marker='o', c='g', label="x=1")
-	ax[1].scatter(data[data["predictions"]==2][1], data[data["predictions"]==2][2], marker='o', c='r', label="x=2")
-	ax[1].legend()
-	plt.show()
-
-	print("\n\n\nAccuracy of GMM:", Accuracy(data[[0]].values, data[["predictions"]].values))
-
-			
-	data.to_csv(args.out_file, sep="\t")
-	print("\n\n Outputs saved in {}".format(args.out_file))
-	print("\n\n\t\tEnd of program")
-
-	
-
-
-
-if __name__=="__main__":
-	parser = argparse.ArgumentParser()
-	parser.add_argument("--data_file", dest='data_file', type=str, default="HMMdata.csv",  action='store', help="csv file containing the data")
-	parser.add_argument("--out_file", dest='out_file', type=str, default="EM_GMM_output.tsv",  action='store', help="tsv file containing the output predictions")
-	parser.add_argument("--label_idx", dest='label_idx', type=int, default=0,  action='store', help="column index of true labels in data (assumed to be integer valued, starting from 0)")
-	parser.add_argument("--epochs", dest='epochs', type=int, default=5000,  action='store', help="no. of epochs over the data")
-	args = parser.parse_args()
-	main(args)
+		return self.r_n_k
